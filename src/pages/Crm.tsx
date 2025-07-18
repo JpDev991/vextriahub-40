@@ -23,6 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useState } from "react";
+import { NovoLeadDialog } from "@/components/Crm/NovoLeadDialog";
 
 
 
@@ -45,6 +46,7 @@ export default function Crm() {
   const [historyItems, setHistoryItems] = useState([]);
   const [editingHistoryItem, setEditingHistoryItem] = useState(null);
   const [showNewHistoryDialog, setShowNewHistoryDialog] = useState(false);
+  const [showNovoLeadDialog, setShowNovoLeadDialog] = useState(false);
   const [newHistoryForm, setNewHistoryForm] = useState({
     title: '',
     date: '',
@@ -117,6 +119,16 @@ export default function Crm() {
       status: 'completed'
     });
     setShowNewHistoryDialog(false);
+  };
+
+  const handleNovoLead = () => {
+    setShowNovoLeadDialog(true);
+  };
+
+  const handleLeadSaved = (lead) => {
+    console.log('Lead salvo:', lead);
+    // Aqui você pode atualizar a lista de leads ou fazer outras ações necessárias
+    // Por exemplo, recarregar dados, mostrar na interface, etc.
   };
 
   const renderSpecificView = () => {
@@ -1094,7 +1106,7 @@ export default function Crm() {
                     <p className="text-sm md:text-base text-muted-foreground">Gerencie seus leads e relacionamentos</p>
                   </div>
                 </div>
-                <Button className="w-full sm:w-auto">
+                <Button className="w-full sm:w-auto" onClick={handleNovoLead}>
                   <Plus className="h-4 w-4 mr-2" />
                   Novo Lead
                 </Button>
@@ -1371,6 +1383,13 @@ export default function Crm() {
                 </TabsContent>
               </Tabs>
       </div>
+      
+      {/* Dialog de Novo Lead */}
+      <NovoLeadDialog
+        open={showNovoLeadDialog}
+        onOpenChange={setShowNovoLeadDialog}
+        onSave={handleLeadSaved}
+      />
     </div>
   );
 }
