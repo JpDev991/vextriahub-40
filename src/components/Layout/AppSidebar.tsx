@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   Sidebar,
   SidebarContent,
@@ -71,7 +71,8 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
   const { logout } = useAuth();
   const { toast } = useToast();
-  const { canViewAdminFeatures, canManageOffice, isSuperAdmin } = useUserRole();
+  const { canViewAdmin, canManageOffice } = usePermissions();
+  const { isSuperAdmin } = useAuth();
 
   const handleLogout = () => {
     console.log("Logout clicado - AppSidebar");
@@ -138,14 +139,14 @@ export function AppSidebar() {
           <Separator className="my-3 md:my-4" />
 
           {/* Menu de Administração */}
-          {(canViewAdminFeatures || canManageOffice) && (
+          {(canViewAdmin || canManageOffice) && (
             <SidebarGroup>
               <SidebarGroupLabel className={`text-xs md:text-sm px-2 ${(isCollapsed && !isMobile) ? "sr-only" : ""}`}>
                 Administração
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="space-y-1">
-                  {canViewAdminFeatures && (
+                  {canViewAdmin && (
                     <SidebarMenuItem>
                       <SidebarMenuButton asChild className="p-0">
                         <NavLink to="/admin" className={getNavClasses}>
@@ -172,7 +173,7 @@ export function AppSidebar() {
             </SidebarGroup>
           )}
 
-          {(canViewAdminFeatures || canManageOffice) && <Separator className="my-3 md:my-4" />}
+          {(canViewAdmin || canManageOffice) && <Separator className="my-3 md:my-4" />}
 
           <SidebarGroup>
             <SidebarGroupLabel className={`text-xs md:text-sm px-2 ${(isCollapsed && !isMobile) ? "sr-only" : ""}`}>

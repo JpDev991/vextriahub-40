@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
@@ -53,22 +53,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const navigate = useNavigate();
+  const mountedRef = useRef(true);
+  const initializingRef = useRef(false);
 
   // Fetch user profile from database with timeout
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string) => {
+    if (!mountedRef.current) return null;
+    
     try {
       console.log('Fetching profile for user:', userId);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
-      );
       
-      const fetchPromise = supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+      const { data, error } = await Promise.race([
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+        )
+      ]) as any;
 
       if (error) {
         console.error('Error fetching profile:', error);
@@ -81,10 +85,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error in fetchProfile:', error);
       return null;
     }
-  };
+  }, []);
 
   // Fetch office data for user
-  const fetchOfficeData = async (userId: string) => {
+  const fetchOfficeData = useCallback(async (userId: string) => {
+    if (!mountedRef.current) return { officeUser: null, office: null };
+    
     try {
       // Buscar office_user
       const { data: officeUserData, error: officeUserError } = await supabase
@@ -109,10 +115,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error fetching office data:', error);
       return { officeUser: null, office: null };
     }
-  };
+  }, []);
 
   // Create profile manually if trigger failed
-  const createProfileIfNotExists = async (userId: string, email: string, fullName?: string) => {
+  const createProfileIfNotExists = useCallback(async (userId: string, email: string, fullName?: string) => {
+    if (!mountedRef.current) return null;
+    
     try {
       console.log('Creating profile for user:', userId, email);
       const role = email === 'contato@vextriahub.com.br' ? 'super_admin' : 'user';
@@ -139,162 +147,132 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error in createProfileIfNotExists:', error);
       return null;
     }
-  };
+  }, []);
+
+  // Process user data after authentication
+  const processUserData = useCallback(async (sessionUser: SupabaseUser) => {
+    if (!mountedRef.current || initializingRef.current) return;
+    
+    try {
+      console.log('Processing user data for:', sessionUser.email);
+      
+      // Fetch user profile
+      let profileData = await fetchProfile(sessionUser.id);
+      
+      if (!mountedRef.current) return;
+      
+      // If profile doesn't exist, create it (fallback for trigger failure)
+      if (!profileData && sessionUser.email) {
+        const fullName = sessionUser.user_metadata?.full_name || 
+                        sessionUser.user_metadata?.name ||
+                        sessionUser.email.split('@')[0];
+        
+        profileData = await createProfileIfNotExists(
+          sessionUser.id, 
+          sessionUser.email, 
+          fullName
+        );
+      }
+      
+      if (!mountedRef.current || !profileData) return;
+      
+      setProfile(profileData);
+      
+      // Fetch office data
+      const { officeUser, office } = await fetchOfficeData(sessionUser.id);
+      
+      if (!mountedRef.current) return;
+      
+      setOfficeUser(officeUser);
+      setOffice(office);
+      
+      // Create user object for compatibility
+      const userData: User = {
+        id: sessionUser.id,
+        name: profileData.full_name || sessionUser.email?.split('@')[0] || 'Usuário',
+        email: sessionUser.email || '',
+        role: profileData.role,
+        office_id: profileData.office_id,
+        office_role: officeUser?.role || null
+      };
+      
+      setUser(userData);
+      
+      // Check if it's first login (profile just created)
+      const profileAge = Date.now() - new Date(profileData.created_at).getTime();
+      const isNewProfile = profileAge < 60000; // Less than 1 minute old
+      setIsFirstLogin(isNewProfile && profileData.role !== 'super_admin');
+      
+    } catch (error) {
+      console.error('Error processing user data:', error);
+    }
+  }, [fetchProfile, createProfileIfNotExists, fetchOfficeData]);
+
+  // Handle auth state change
+  const handleAuthStateChange = useCallback(async (event: string, newSession: Session | null) => {
+    if (!mountedRef.current) return;
+    
+    console.log('Auth state changed:', event, newSession?.user?.email);
+    
+    setSession(newSession);
+    
+    if (newSession?.user) {
+      await processUserData(newSession.user);
+    } else {
+      setUser(null);
+      setProfile(null);
+      setOffice(null);
+      setOfficeUser(null);
+      setIsFirstLogin(false);
+    }
+    
+    if (mountedRef.current) {
+      setIsLoading(false);
+    }
+  }, [processUserData]);
 
   // Initialize auth state
   useEffect(() => {
-    let mounted = true;
+    if (initializingRef.current) return;
+    
+    initializingRef.current = true;
+    mountedRef.current = true;
     
     const initializeAuth = async () => {
       try {
         console.log('Initializing auth...');
-        // Get initial session with timeout
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session fetch timeout')), 3000)
-        );
         
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+        const { data: { session: currentSession } } = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Session fetch timeout')), 3000)
+          )
+        ]) as any;
         
-        if (!mounted) return;
+        if (!mountedRef.current) return;
         
-        if (session?.user) {
-          console.log('Session found:', session.user.email);
-          setSession(session);
-          
-          // Fetch user profile
-          let profileData = await fetchProfile(session.user.id);
-          
-          if (!mounted) return;
-          
-          // If profile doesn't exist, create it (fallback for trigger failure)
-          if (!profileData && session.user.email) {
-            const fullName = session.user.user_metadata?.full_name || 
-                            session.user.user_metadata?.name ||
-                            session.user.email.split('@')[0];
-            
-            profileData = await createProfileIfNotExists(
-              session.user.id, 
-              session.user.email, 
-              fullName
-            );
-          }
-          
-          if (!mounted) return;
-          
-          if (profileData) {
-            setProfile(profileData);
-            
-            // Fetch office data
-            const { officeUser, office } = await fetchOfficeData(session.user.id);
-            
-            if (!mounted) return;
-            
-            setOfficeUser(officeUser);
-            setOffice(office);
-            
-            // Create user object for compatibility
-            const userData: User = {
-              id: session.user.id,
-              name: profileData.full_name || session.user.email?.split('@')[0] || 'Usuário',
-              email: session.user.email || '',
-              role: profileData.role,
-              office_id: profileData.office_id,
-              office_role: officeUser?.role || null
-            };
-            
-            setUser(userData);
-            
-            // Check if it's first login (profile just created)
-            const profileAge = Date.now() - new Date(profileData.created_at).getTime();
-            const isNewProfile = profileAge < 60000; // Less than 1 minute old
-            setIsFirstLogin(isNewProfile && profileData.role !== 'super_admin');
-          }
+        setSession(currentSession);
+        
+        if (currentSession?.user) {
+          console.log('Session found:', currentSession.user.email);
+          await processUserData(currentSession.user);
         } else {
           console.log('No session found');
         }
         
-        if (mounted) {
+        if (mountedRef.current) {
           setIsLoading(false);
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
-        if (mounted) {
+        if (mountedRef.current) {
           setIsLoading(false);
         }
       }
     };
     
     // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
-        if (!mounted) return;
-        
-        setSession(session);
-        
-        if (session?.user) {
-          // Fetch user profile
-          let profileData = await fetchProfile(session.user.id);
-          
-          if (!mounted) return;
-          
-          // If profile doesn't exist, create it (fallback for trigger failure)
-          if (!profileData && session.user.email) {
-            const fullName = session.user.user_metadata?.full_name || 
-                            session.user.user_metadata?.name ||
-                            session.user.email.split('@')[0];
-            
-            profileData = await createProfileIfNotExists(
-              session.user.id, 
-              session.user.email, 
-              fullName
-            );
-          }
-          
-          if (!mounted) return;
-          
-          if (profileData) {
-            setProfile(profileData);
-            
-            // Fetch office data
-            const { officeUser, office } = await fetchOfficeData(session.user.id);
-            
-            if (!mounted) return;
-            
-            setOfficeUser(officeUser);
-            setOffice(office);
-            
-            // Create user object for compatibility
-            const userData: User = {
-              id: session.user.id,
-              name: profileData.full_name || session.user.email?.split('@')[0] || 'Usuário',
-              email: session.user.email || '',
-              role: profileData.role,
-              office_id: profileData.office_id,
-              office_role: officeUser?.role || null
-            };
-            
-            setUser(userData);
-            
-            // Check if it's first login (profile just created)
-            const profileAge = Date.now() - new Date(profileData.created_at).getTime();
-            const isNewProfile = profileAge < 60000; // Less than 1 minute old
-            setIsFirstLogin(isNewProfile && profileData.role !== 'super_admin');
-          }
-        } else {
-          setUser(null);
-          setProfile(null);
-          setOffice(null);
-          setOfficeUser(null);
-          setIsFirstLogin(false);
-        }
-        
-        if (mounted) {
-          setIsLoading(false);
-        }
-      }
-    );
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthStateChange);
 
     // Initialize auth
     initializeAuth();
@@ -307,10 +285,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     oldKeys.forEach(key => localStorage.removeItem(key));
 
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Empty dependency array - only run once
 
   const login = async (email: string, password: string) => {
     console.log('Attempting login for:', email);
@@ -425,9 +403,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const resetFirstLogin = () => {
+  const resetFirstLogin = useCallback(() => {
     setIsFirstLogin(false);
-  };
+  }, []);
 
   const value = {
     user,

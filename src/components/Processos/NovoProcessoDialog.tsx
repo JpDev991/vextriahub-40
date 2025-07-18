@@ -1,6 +1,5 @@
-
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -9,344 +8,263 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Plus, CheckCircle, AlertCircle, Info } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { formatCNJ, validateProcessNumber, extractCNJInfo } from "@/utils/cnjUtils";
-import { useToast } from "@/hooks/use-toast";
-
-interface NovoProcessoForm {
-  titulo: string;
-  cliente: string;
-  numeroProcesso: string;
-  descricao?: string;
-  tipoProcesso?: string;
-  valorCausa?: string;
-  status: string;
-}
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { PermissionGuard } from '@/components/Auth/PermissionGuard';
+import { NovoProcessoForm, statusProcesso, tiposProcesso } from '@/types/processo';
 
 interface NovoProcessoDialogProps {
-  onAddProcesso?: (processo: NovoProcessoForm) => void;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  onProcessoCreated?: (processo: NovoProcessoForm) => void;
+  onAddProcesso: (processo: NovoProcessoForm) => void;
+  trigger?: React.ReactNode;
 }
 
-const TIPOS_PROCESSO = [
-  "Ação de Cobrança",
-  "Ação de Indenização",
-  "Ação Trabalhista",
-  "Divórcio",
-  "Inventário",
-  "Execução",
-  "Cautelar",
-  "Mandado de Segurança",
-  "Ação Penal",
-  "Outros"
-];
-
-const STATUS_PROCESSO = [
-  "Iniciado",
-  "Em Andamento",
-  "Aguardando Documentos",
-  "Suspenso",
-  "Arquivado",
-  "Encerrado"
-];
-
-export function NovoProcessoDialog({ onAddProcesso, open: externalOpen, onOpenChange: externalOnOpenChange, onProcessoCreated }: NovoProcessoDialogProps) {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const open = externalOpen !== undefined ? externalOpen : internalOpen;
-  const setOpen = externalOnOpenChange || setInternalOpen;
-  const [numeroValidation, setNumeroValidation] = useState<{ isValid: boolean; type: 'cnj' | 'livre'; message?: string } | null>(null);
-  const [cnjInfo, setCnjInfo] = useState<any>(null);
+export const NovoProcessoDialog: React.FC<NovoProcessoDialogProps> = ({
+  onAddProcesso,
+  trigger
+}) => {
   const { toast } = useToast();
-  
-  const form = useForm<NovoProcessoForm>({
-    defaultValues: {
-      titulo: "",
-      cliente: "",
-      numeroProcesso: "",
-      descricao: "",
-      tipoProcesso: "",
-      valorCausa: "",
-      status: "Iniciado",
-    },
+  const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState<NovoProcessoForm>({
+    titulo: '',
+    cliente: '',
+    status: 'Em andamento',
+    proximoPrazo: '',
+    descricao: '',
+    valorCausa: 0,
+    numeroProcesso: '',
+    tipoProcesso: ''
   });
 
-  const handleNumeroProcessoChange = (value: string) => {
-    let formattedValue = value;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    // Se parece com CNJ, formata automaticamente
-    if (value.includes('-') || value.includes('.') || value.length > 10) {
-      formattedValue = formatCNJ(value);
-    }
-    
-    form.setValue('numeroProcesso', formattedValue);
-    
-    // Valida o número
-    const validation = validateProcessNumber(formattedValue);
-    setNumeroValidation(validation);
-    
-    // Se for CNJ válido, extrai informações
-    if (validation.isValid && validation.type === 'cnj') {
-      const info = extractCNJInfo(formattedValue);
-      setCnjInfo(info);
-    } else {
-      setCnjInfo(null);
-    }
-  };
-
-  const onSubmit = (values: NovoProcessoForm) => {
-    // Valida o número do processo antes de submeter
-    const validation = validateProcessNumber(values.numeroProcesso);
-    if (!validation.isValid) {
+    // Validação básica
+    if (!formData.titulo.trim()) {
       toast({
         title: "Erro de validação",
-        description: validation.message || "Número do processo inválido",
+        description: "O título é obrigatório.",
         variant: "destructive",
       });
       return;
     }
-    
-    // Chama as funções de callback se existirem
-    if (onAddProcesso) {
-      onAddProcesso(values);
+
+    if (!formData.cliente.trim()) {
+      toast({
+        title: "Erro de validação",
+        description: "O cliente é obrigatório.",
+        variant: "destructive",
+      });
+      return;
     }
-    if (onProcessoCreated) {
-      onProcessoCreated(values);
+
+    setIsLoading(true);
+    
+    try {
+      const novoProcesso = {
+        ...formData,
+        id: Date.now().toString(), // ID temporário
+        dataInicio: new Date().toISOString().split('T')[0],
+        valorCausa: formData.valorCausa || 0
+      };
+
+      onAddProcesso(novoProcesso);
+      
+      // Resetar formulário
+      setFormData({
+        titulo: '',
+        cliente: '',
+        status: 'Em andamento',
+        proximoPrazo: '',
+        descricao: '',
+        valorCausa: 0,
+        numeroProcesso: '',
+        tipoProcesso: ''
+      });
+      
+      setOpen(false);
+      
+      toast({
+        title: "Processo criado",
+        description: "O novo processo foi criado com sucesso.",
+      });
+    } catch (error) {
+      console.error('Erro ao criar processo:', error);
+      toast({
+        title: "Erro ao criar",
+        description: "Ocorreu um erro ao criar o processo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-    
-    form.reset();
-    setOpen(false);
-    setNumeroValidation(null);
-    setCnjInfo(null);
-    
-    toast({
-      title: "Processo criado",
-      description: `Processo ${values.numeroProcesso} foi criado com sucesso.`,
-    });
   };
 
+  const handleChange = (field: keyof NovoProcessoForm, value: string | number) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const defaultTrigger = (
+    <Button>
+      <Plus className="mr-2 h-4 w-4" />
+      Novo Processo
+    </Button>
+  );
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Processo
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Novo Processo</DialogTitle>
-          <DialogDescription>
-            Adicione um novo processo ao sistema. Use números CNJ para validação automática.
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="titulo"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Título *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Digite o título do processo" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="numeroProcesso"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Número do Processo *</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Ex: 1234567-89.2023.8.26.0001" 
-                        {...field}
-                        onChange={(e) => handleNumeroProcessoChange(e.target.value)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Digite um número CNJ válido ou número livre
-                    </FormDescription>
-                    {numeroValidation && (
-                      <div className="flex items-center gap-2 mt-2">
-                        {numeroValidation.isValid ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <AlertCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className={`text-sm ${
-                          numeroValidation.isValid ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {numeroValidation.type === 'cnj' ? 'CNJ válido' : 
-                           numeroValidation.type === 'livre' ? 'Número livre' : 
-                           numeroValidation.message}
-                        </span>
-                        {numeroValidation.type === 'cnj' && (
-                          <Badge variant="secondary" className="text-xs">
-                            CNJ
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                    {cnjInfo && (
-                      <div className="mt-2 p-3 bg-blue-50 rounded-lg border">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Info className="h-4 w-4 text-blue-500" />
-                          <span className="text-sm font-medium text-blue-700">Informações do CNJ</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs text-blue-600">
-                          <div>Ano: {cnjInfo.ano}</div>
-                          <div>Tribunal: {cnjInfo.tribunal}</div>
-                          <div>Origem: {cnjInfo.origem}</div>
-                          <div>Segmento: {cnjInfo.segmento}</div>
-                        </div>
-                      </div>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="cliente"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cliente *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Digite o nome do cliente" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="tipoProcesso"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tipo de Processo</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o tipo" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {TIPOS_PROCESSO.map((tipo) => (
-                          <SelectItem key={tipo} value={tipo}>
-                            {tipo}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {STATUS_PROCESSO.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {status}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="valorCausa"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor da Causa</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="R$ 0,00" 
-                        {...field}
-                        onChange={(e) => {
-                          // Formatar como moeda
-                          let value = e.target.value.replace(/\D/g, '');
-                          value = (Number(value) / 100).toLocaleString('pt-BR', {
-                            style: 'currency',
-                            currency: 'BRL'
-                          });
-                          field.onChange(value);
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+    <PermissionGuard permission="canCreateProcessos">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          {trigger || defaultTrigger}
+        </DialogTrigger>
+        
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Novo Processo</DialogTitle>
+            <DialogDescription>
+              Crie um novo processo jurídico preenchendo as informações abaixo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Título */}
+            <div className="space-y-2">
+              <Label htmlFor="titulo">Título *</Label>
+              <Input
+                id="titulo"
+                value={formData.titulo}
+                onChange={(e) => handleChange('titulo', e.target.value)}
+                placeholder="Ex: Ação Trabalhista - Cliente X"
+                required
               />
             </div>
-            
-            <FormField
-              control={form.control}
-              name="descricao"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Descrição</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Descreva brevemente o processo..."
-                      className="min-h-[80px]"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
+
+            {/* Cliente */}
+            <div className="space-y-2">
+              <Label htmlFor="cliente">Cliente *</Label>
+              <Input
+                id="cliente"
+                value={formData.cliente}
+                onChange={(e) => handleChange('cliente', e.target.value)}
+                placeholder="Nome do cliente"
+                required
+              />
+            </div>
+
+            {/* Status e Tipo em linha */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select 
+                  value={formData.status} 
+                  onValueChange={(value) => handleChange('status', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusProcesso.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tipoProcesso">Tipo do Processo</Label>
+                <Select 
+                  value={formData.tipoProcesso || ''} 
+                  onValueChange={(value) => handleChange('tipoProcesso', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tiposProcesso.map((tipo) => (
+                      <SelectItem key={tipo} value={tipo}>
+                        {tipo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Número do Processo */}
+            <div className="space-y-2">
+              <Label htmlFor="numeroProcesso">Número do Processo</Label>
+              <Input
+                id="numeroProcesso"
+                value={formData.numeroProcesso || ''}
+                onChange={(e) => handleChange('numeroProcesso', e.target.value)}
+                placeholder="Ex: 1234567-12.2024.8.26.0001"
+              />
+            </div>
+
+            {/* Próximo Prazo e Valor da Causa em linha */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="proximoPrazo">Próximo Prazo</Label>
+                <Input
+                  id="proximoPrazo"
+                  type="date"
+                  value={formData.proximoPrazo || ''}
+                  onChange={(e) => handleChange('proximoPrazo', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="valorCausa">Valor da Causa (R$)</Label>
+                <Input
+                  id="valorCausa"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.valorCausa || ''}
+                  onChange={(e) => handleChange('valorCausa', parseFloat(e.target.value) || 0)}
+                  placeholder="0,00"
+                />
+              </div>
+            </div>
+
+            {/* Descrição */}
+            <div className="space-y-2">
+              <Label htmlFor="descricao">Descrição</Label>
+              <Textarea
+                id="descricao"
+                value={formData.descricao || ''}
+                onChange={(e) => handleChange('descricao', e.target.value)}
+                placeholder="Descrição detalhada do processo..."
+                rows={3}
+              />
+            </div>
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setOpen(false)}
+                disabled={isLoading}
+              >
                 Cancelar
               </Button>
-              <Button type="submit">Criar Processo</Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? "Criando..." : "Criar Processo"}
+              </Button>
             </DialogFooter>
           </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </PermissionGuard>
   );
-}
+};

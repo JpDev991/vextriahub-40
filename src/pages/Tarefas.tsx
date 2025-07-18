@@ -1,14 +1,22 @@
-
-import { Calendar, Plus, Search, Filter, Clock, AlertTriangle, CheckCircle } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { Tarefa } from "@/types/tarefa";
+import { useTarefaService } from "@/services/tarefaService";
+import { useMultiSelect } from "@/hooks/useMultiSelect";
 
-const tasks = [
+// Componentes refatorados
+import { TarefasPageHeader } from "@/components/Tarefas/TarefasPageHeader";
+import { TarefasFilters } from "@/components/Tarefas/TarefasFilters";
+import { TarefasList } from "@/components/Tarefas/TarefasList";
+import { TarefasEmptyState } from "@/components/Tarefas/TarefasEmptyState";
+
+// Componentes existentes mantidos
+import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+
+// Dados de exemplo
+const initialTasks: Tarefa[] = [
   {
     id: 1,
     title: "Protocolar petição inicial - Silva vs. Empresa XYZ",
@@ -17,7 +25,8 @@ const tasks = [
     client: "Maria Silva",
     case: "Trabalhista #2024-001",
     points: 50,
-    completed: false
+    completed: false,
+    description: "Protocolar petição inicial no processo trabalhista contra a Empresa XYZ"
   },
   {
     id: 2,
@@ -27,7 +36,8 @@ const tasks = [
     client: "João Santos",
     case: "Civil #2024-015",
     points: 40,
-    completed: false
+    completed: false,
+    description: "Responder à publicação judicial referente ao processo civil"
   },
   {
     id: 3,
@@ -37,121 +47,224 @@ const tasks = [
     client: "Tech Solutions Ltda",
     case: "Empresarial #2024-008",
     points: 20,
-    completed: true
+    completed: true,
+    description: "Reunião de alinhamento sobre contratos empresariais"
   }
 ];
 
-const getPriorityColor = (priority: string) => {
-  switch (priority) {
-    case "alta":
-      return "bg-destructive text-destructive-foreground";
-    case "media":
-      return "bg-accent text-accent-foreground";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-};
-
 const Tarefas = () => {
   const { toast } = useToast();
-  const [taskList, setTaskList] = useState(tasks);
+  const tarefaService = useTarefaService();
+  
+  // Estados
+  const [tarefas, setTarefas] = useState<Tarefa[]>(initialTasks);
   const [completedTasks, setCompletedTasks] = useState<number[]>([3]);
+  const [searchValue, setSearchValue] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("priority");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const toggleTask = (taskId: number) => {
-    setCompletedTasks(prev =>
-      prev.includes(taskId)
-        ? prev.filter(id => id !== taskId)
-        : [...prev, taskId]
-    );
+  // Multi-seleção
+  const multiSelect = useMultiSelect(tarefas);
+
+  // Handlers
+  const handleToggleComplete = (taskId: number) => {
+    const result = tarefaService.toggleTaskCompletion(tarefas, taskId);
+    setTarefas(result.tarefas);
+    
+    if (result.completedTask) {
+      setCompletedTasks(prev => 
+        result.completedTask!.completed 
+          ? [...prev, taskId]
+          : prev.filter(id => id !== taskId)
+      );
+    }
   };
+
+  const handleNewTarefa = () => {
+    toast({
+      title: "Nova Tarefa",
+      description: "Funcionalidade de nova tarefa será implementada em breve.",
+    });
+  };
+
+  const handleDeleteSelected = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const selectedIds = multiSelect.getSelectedItems().map(item => item.id);
+      const result = tarefaService.deleteTarefas(tarefas, selectedIds);
+      
+      if (result.success) {
+        setTarefas(result.tarefas);
+        setCompletedTasks(prev => prev.filter(id => !selectedIds.includes(id)));
+        multiSelect.clearSelection();
+      }
+    } catch (error) {
+      toast({
+        title: "Erro ao excluir",
+        description: "Ocorreu um erro ao excluir as tarefas.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
+  const handleLoadSampleData = () => {
+    setTarefas(initialTasks);
+    setCompletedTasks([3]);
+    toast({
+      title: "Dados carregados",
+      description: "Dados de exemplo foram carregados com sucesso.",
+    });
+  };
+
+  // Handlers de filtros
+  const handleSearchChange = (value: string) => {
+    setSearchValue(value);
+  };
+
+  const handlePriorityFilterChange = (value: string) => {
+    setPriorityFilter(value);
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
+  };
+
+  const handleSortChange = (value: string) => {
+    setSortBy(value);
+  };
+
+  const handleClearFilters = () => {
+    setSearchValue("");
+    setPriorityFilter("all");
+    setStatusFilter("all");
+    setSortBy("priority");
+  };
+
+  // Filtragem e ordenação
+  const filteredTarefas = tarefaService.filterTarefas(tarefas, {
+    search: searchValue,
+    priority: priorityFilter !== "all" ? priorityFilter : undefined,
+    status: statusFilter !== "all" ? statusFilter : undefined,
+  });
+
+  const sortedTarefas = tarefaService.sortTarefas(filteredTarefas, sortBy as any);
+
+  // Estatísticas
+  const stats = tarefaService.calculateStats(tarefas);
+
+  // Contagem de filtros ativos
+  const activeFiltersCount = [
+    searchValue !== "",
+    priorityFilter !== "all",
+    statusFilter !== "all"
+  ].filter(Boolean).length;
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 overflow-x-hidden">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Tarefas</h1>
-          <p className="text-sm md:text-base text-muted-foreground">
-            Gerencie suas tarefas e prazos com sistema de pontuação.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Tarefa
-          </Button>
-        </div>
-      </div>
+      <TarefasPageHeader
+        selectedCount={multiSelect.selectedCount}
+        onDeleteSelected={handleDeleteSelected}
+        onNewTarefa={handleNewTarefa}
+        isNoneSelected={multiSelect.isNoneSelected}
+        stats={stats}
+      />
 
-      {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar tarefas..."
-            className="pl-10"
+      {/* Empty State */}
+      {tarefas.length === 0 ? (
+        <TarefasEmptyState
+          onNewTarefa={handleNewTarefa}
+          onLoadSampleData={handleLoadSampleData}
+        />
+      ) : (
+        <>
+          {/* Filtros */}
+          <TarefasFilters
+            searchValue={searchValue}
+            priorityFilter={priorityFilter}
+            statusFilter={statusFilter}
+            sortBy={sortBy}
+            onSearchChange={handleSearchChange}
+            onPriorityFilterChange={handlePriorityFilterChange}
+            onStatusFilterChange={handleStatusFilterChange}
+            onSortChange={handleSortChange}
+            onClearFilters={handleClearFilters}
+            activeFiltersCount={activeFiltersCount}
           />
-        </div>
-        <Button variant="outline" className="w-full sm:w-auto">
-          <Filter className="h-4 w-4 mr-2" />
-          Filtros
-        </Button>
-      </div>
 
-      {/* Tasks List */}
-      <div className="space-y-4">
-        {taskList.map((task) => (
-          <Card key={task.id} className={`transition-all duration-200 ${
-            completedTasks.includes(task.id) ? "bg-muted/30 opacity-75" : ""
-          }`}>
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <Checkbox
-                  checked={completedTasks.includes(task.id)}
-                  onCheckedChange={() => toggleTask(task.id)}
-                  className="mt-1"
-                />
-                <div className="flex-1 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                    <h4 className={`font-medium ${
-                      completedTasks.includes(task.id) ? "line-through text-muted-foreground" : ""
-                    }`}>
-                      {task.title}
-                    </h4>
-                    <div className="flex items-center gap-2">
-                      <Badge className={getPriorityColor(task.priority)}>
-                        {task.priority}
-                      </Badge>
-                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                        {task.points} pts
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      {task.dueDate}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      {task.client}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {completedTasks.includes(task.id) ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
+          {/* Empty State para filtros */}
+          {sortedTarefas.length === 0 ? (
+            <TarefasEmptyState
+              onNewTarefa={handleNewTarefa}
+              onLoadSampleData={handleLoadSampleData}
+              isFiltered={true}
+              onClearFilters={handleClearFilters}
+            />
+          ) : (
+            <>
+              {/* Controles de seleção */}
+              {sortedTarefas.length > 0 && (
+                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <Checkbox
+                      checked={multiSelect.isAllSelected}
+                      onCheckedChange={() => 
+                        multiSelect.isAllSelected ? multiSelect.clearSelection() : multiSelect.selectAll()
+                      }
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {multiSelect.selectedCount > 0 ? (
+                        `${multiSelect.selectedCount} de ${sortedTarefas.length} selecionada(s)`
                       ) : (
-                        <AlertTriangle className="h-4 w-4" />
+                        "Selecionar todas"
                       )}
-                      {task.case}
-                    </div>
+                    </span>
                   </div>
+                  {multiSelect.selectedCount > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={multiSelect.clearSelection}
+                    >
+                      Limpar seleção
+                    </Button>
+                  )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              )}
+
+              {/* Lista de Tarefas */}
+              <TarefasList
+                tarefas={sortedTarefas}
+                selectedIds={multiSelect.getSelectedItems().map(item => item.id)}
+                completedIds={completedTasks}
+                onToggleSelect={multiSelect.toggleItem}
+                onToggleComplete={handleToggleComplete}
+                getPriorityColor={tarefaService.getPriorityColor}
+              />
+            </>
+          )}
+        </>
+      )}
+
+      {/* Modal de confirmação de exclusão */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+        title="Excluir Tarefas"
+        description={`Tem certeza que deseja excluir ${multiSelect.selectedCount} tarefa(s)? Apenas tarefas concluídas podem ser excluídas.`}
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

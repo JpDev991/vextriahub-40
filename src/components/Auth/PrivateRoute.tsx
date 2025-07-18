@@ -1,28 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUserRole } from '@/hooks/useUserRole';
+import { usePermissions } from '@/hooks/usePermissions';
+import { FeaturePermissions } from '@/types/permissions';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
   requireRole?: 'user' | 'admin' | 'super_admin';
-  requirePermission?: 
-    | 'canViewAdminFeatures'
-    | 'canManageOffice'
-    | 'canManageUsers'
-    | 'canManageSubscriptions'
-    | 'canInviteUsers'
-    | 'canViewAllOffices'
-    | 'canCreateOffices';
+  requirePermission?: keyof FeaturePermissions;
+  requireAnyPermissions?: (keyof FeaturePermissions)[];
+  requireAllPermissions?: (keyof FeaturePermissions)[];
 }
 
 export const PrivateRoute: React.FC<PrivateRouteProps> = ({ 
   children, 
   requireRole,
-  requirePermission 
+  requirePermission,
+  requireAnyPermissions,
+  requireAllPermissions 
 }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
-  const permissions = useUserRole();
+  const permissions = usePermissions();
   const location = useLocation();
   const [showTimeout, setShowTimeout] = useState(false);
 
@@ -80,6 +78,43 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({
           <h2 className="text-2xl font-bold text-destructive">Acesso Negado</h2>
           <p className="text-muted-foreground mt-2">
             Você não tem permissão para acessar esta funcionalidade.
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Permissão necessária: {requirePermission}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Verificar se o usuário tem pelo menos uma das permissões requeridas
+  if (requireAnyPermissions && !requireAnyPermissions.some(permission => permissions[permission])) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-destructive">Acesso Negado</h2>
+          <p className="text-muted-foreground mt-2">
+            Você não tem permissão para acessar esta funcionalidade.
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Permissões necessárias: {requireAnyPermissions.join(' OU ')}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Verificar se o usuário tem todas as permissões requeridas
+  if (requireAllPermissions && !requireAllPermissions.every(permission => permissions[permission])) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-destructive">Acesso Negado</h2>
+          <p className="text-muted-foreground mt-2">
+            Você não tem permissão para acessar esta funcionalidade.
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Permissões necessárias: {requireAllPermissions.join(' E ')}
           </p>
         </div>
       </div>

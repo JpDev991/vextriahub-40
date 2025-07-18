@@ -278,14 +278,14 @@ const AppWithRouter = () => {
           }
         />
         <Route path="/admin" element={
-          <PrivateRoute>
+          <PrivateRoute requirePermission="canViewAdmin">
             <Admin />
           </PrivateRoute>
         } />
         <Route
           path="/escritorio"
           element={
-            <PrivateRoute>
+            <PrivateRoute requirePermission="canManageOffice">
               <AppLayout>
                 <Escritorio />
               </AppLayout>
