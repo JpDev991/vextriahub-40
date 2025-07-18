@@ -84,10 +84,14 @@ export function useTimesheet(): TimesheetHookResult {
       return;
     }
 
-    // Proteção contra múltiplas chamadas simultâneas
-    if (loading && hasInitialized) return;
+    // Proteção contra múltiplas chamadas simultâneas - simplificada
+    if (loading) {
+      console.log('🔄 fetchData: Already loading, skipping...');
+      return;
+    }
 
     try {
+      console.log('🔄 fetchData: Starting for user:', user.id);
       setLoading(true);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -102,25 +106,18 @@ export function useTimesheet(): TimesheetHookResult {
 
       if (error) throw error;
       
+      console.log('🔄 fetchData: Success, found', result?.length || 0, 'records');
       setData(result || []);
       setError(null);
 
       // Verificar timer ativo apenas se não há erro
       await getActiveTimerInternal();
     } catch (err) {
-      console.error('Erro ao buscar timesheets:', err);
+      console.error('🔄 fetchData: Error:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
       setData([]); // Garantir que data seja um array vazio em caso de erro
-      
-      // Mostrar toast de erro apenas se não for erro de permissão
-      if (err instanceof Error && !err.message.includes('permission')) {
-        toast({
-          title: 'Erro ao carregar timesheet',
-          description: 'Não foi possível carregar os registros de tempo.',
-          variant: 'destructive',
-        });
-      }
     } finally {
+      console.log('🔄 fetchData: Finalizing, setting hasInitialized to true');
       setLoading(false);
       setHasInitialized(true);
     }
@@ -420,10 +417,40 @@ export function useTimesheet(): TimesheetHookResult {
 
   // Efeito para carregar dados na inicialização - executar apenas uma vez quando user mudar
   useEffect(() => {
-    if (user && !hasInitialized) {
-      fetchData();
+    console.log('🔄 useTimesheet useEffect triggered:', { 
+      hasUser: !!user, 
+      userId: user?.id, 
+      hasInitialized 
+    });
+    
+    if (user) {
+      // Reset hasInitialized quando o usuário muda
+      if (hasInitialized) {
+        console.log('🔄 Resetting initialization for new user');
+        setHasInitialized(false);
+        setLoading(true);
+      }
+      
+      // Chamar fetchData diretamente sem dependência circular
+      if (!hasInitialized) {
+        console.log('🔄 Calling fetchData for user:', user.id);
+        fetchData().catch(error => {
+          console.error('🔄 fetchData error in useEffect:', error);
+          // Garantir que hasInitialized seja definido mesmo com erro
+          setHasInitialized(true);
+          setLoading(false);
+        });
+      }
+    } else {
+      // Sem usuário, limpar estado
+      console.log('🔄 No user, clearing state');
+      setData([]);
+      setLoading(false);
+      setHasInitialized(false);
+      setActiveTimer(null);
+      setError(null);
     }
-  }, [user?.id, hasInitialized, fetchData]);
+  }, [user?.id]); // Apenas user?.id como dependência
 
   return {
     data,

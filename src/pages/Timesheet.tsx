@@ -5,12 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Clock, Play, Pause, Square, Timer, Plus, AlertCircle } from "lucide-react";
+import { Clock, Play, Pause, Square, Timer, Plus, AlertCircle, ArrowUpRight, TrendingUp } from "lucide-react";
 import { useTimesheet, TIMESHEET_CATEGORIAS, type TimesheetCategoria } from "@/hooks/useTimesheet";
 
 export default function Timesheet() {
   // Estado para controlar se o componente foi montado
   const [mounted, setMounted] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
   
   // Tentar usar hook real, com fallback para funcionalidade local
   const hookResult = useTimesheet();
@@ -37,21 +38,38 @@ export default function Timesheet() {
   // Marcar como montado após a primeira renderização
   useEffect(() => {
     setMounted(true);
-    console.log('Timesheet: Componente montado');
+    console.log('⏰ Timesheet: Componente montado');
   }, []);
+
+  // Timeout de segurança para carregamento
+  useEffect(() => {
+    if (loading && mounted) {
+      console.log('⏰ Timesheet: Loading started, setting 10s timeout');
+      const timeout = setTimeout(() => {
+        console.log('⏰ Timesheet: Loading timeout reached');
+        setLoadingTimeout(true);
+      }, 10000); // 10 segundos
+
+      return () => {
+        clearTimeout(timeout);
+        setLoadingTimeout(false);
+      };
+    }
+  }, [loading, mounted]);
 
   // Log para debug de estados
   useEffect(() => {
     if (mounted) {
-      console.log('Timesheet: Estados atuais', {
+      console.log('⏰ Timesheet: Estados atuais', {
         loading,
+        loadingTimeout,
         error,
         timesheetsCount: timesheets?.length || 0,
         activeTimer: !!activeTimer,
         mounted
       });
     }
-  }, [mounted, loading, error, timesheets?.length, activeTimer]);
+  }, [mounted, loading, loadingTimeout, error, timesheets?.length, activeTimer]);
 
   // Usar timer ativo do hook ou local como fallback
   const timerAtivo = activeTimer || (isTimerActive ? { tarefa_descricao: formData.descricao } : null);
@@ -162,217 +180,277 @@ export default function Timesheet() {
     return `${mins}m`;
   };
 
-  // Mostrar carregamento apenas se realmente carregando e montado
-  if (!mounted || (loading && mounted)) {
+  // Mostrar carregamento apenas se realmente carregando e montado (com timeout)
+  if (!mounted || (loading && mounted && !loadingTimeout)) {
     return (
       <div className="container mx-auto p-4 md:p-6 lg:p-8">
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-muted-foreground">Carregando timesheet...</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {mounted ? 'Conectando com banco de dados...' : 'Inicializando componente...'}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-6">
-      {/* Mostrar erro se houver */}
-      {error && (
-        <Card className="border-destructive">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-4 w-4" />
-              <p className="text-sm">Modo offline: {error}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Clock className="h-6 w-6 md:h-8 md:w-8" />
-            Timesheet {error ? '(Modo Offline)' : ''}
-          </h1>
-          <p className="text-muted-foreground">
-            Controle e acompanhe o tempo gasto em suas atividades jurídicas
-          </p>
-        </div>
-        
-        <Dialog open={isNewTimerDialogOpen} onOpenChange={setIsNewTimerDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2" disabled={!!timerAtivo}>
-              <Plus className="h-4 w-4" />
-              Novo Timer
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Iniciar Novo Timer</DialogTitle>
-              <DialogDescription>
-                Descreva a atividade que você vai realizar e selecione a categoria
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="tarefa">Descrição da Tarefa *</Label>
-                <Input
-                  id="tarefa"
-                  placeholder="Ex: Elaboração de petição inicial..."
-                  value={formData.descricao}
-                  onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="categoria">Categoria *</Label>
-                <Select value={formData.categoria} onValueChange={(value) => setFormData(prev => ({ ...prev, categoria: value as TimesheetCategoria | "" }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIMESHEET_CATEGORIAS.map(cat => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleStartTimer} disabled={!formData.descricao || !formData.categoria}>
-                <Play className="h-4 w-4 mr-2" />
-                Iniciar Timer
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Timer Ativo */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Timer className="h-5 w-5" />
-            Timer Ativo {activeTimer ? '(Supabase)' : isTimerActive ? '(Local)' : ''}
-          </CardTitle>
-          <CardDescription>
-            {timerAtivo ? "Timer em execução" : "Nenhum timer ativo no momento"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {timerAtivo ? (
-            <>
-              <div className="text-center">
-                <div className="text-4xl md:text-6xl font-mono font-bold text-primary">
-                  {formatTime(elapsedTime)}
-                </div>
-                <p className="text-sm font-medium mt-2">
-                  {activeTimer?.tarefa_descricao || formData.descricao}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+      <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
+        {/* Mostrar erro se houver ou se timeout */}
+        {(error || loadingTimeout) && (
+          <Card className="border-destructive bg-red-50/50 dark:bg-red-900/20 backdrop-blur-sm">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <p className="text-sm">
+                  {loadingTimeout ? 
+                    'Timeout de carregamento - Usando modo offline' : 
+                    `Modo offline: ${error}`
+                  }
                 </p>
               </div>
+            </CardContent>
+          </Card>
+        )}
 
-              <div className="flex justify-center gap-3">
-                <Button 
-                  variant="destructive" 
-                  onClick={handleStopTimer}
-                  className="flex items-center gap-2"
-                >
-                  <Square className="h-4 w-4" />
-                  Finalizar
-                </Button>
+        {/* Header com Visual Moderno */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent flex items-center gap-3">
+              <div className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
+                <Clock className="h-8 w-8 text-white" />
               </div>
-            </>
-          ) : (
-            <div className="text-center py-8">
-              <Timer className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground mb-4">Nenhum timer ativo</p>
-              <Button onClick={() => setIsNewTimerDialogOpen(true)} className="flex items-center gap-2">
-                <Play className="h-4 w-4" />
-                Iniciar Novo Timer
+              Timesheet {(error || loadingTimeout) ? '(Modo Offline)' : ''}
+            </h1>
+            <p className="text-lg text-muted-foreground">
+              Controle e acompanhe o tempo gasto em suas atividades jurídicas
+            </p>
+          </div>
+          
+          <Dialog open={isNewTimerDialogOpen} onOpenChange={setIsNewTimerDialogOpen}>
+            <DialogTrigger asChild>
+              <Button 
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 px-6 py-3 rounded-xl" 
+                disabled={!!timerAtivo}
+                size="lg"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Novo Timer
               </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px] rounded-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-2xl">Iniciar Novo Timer</DialogTitle>
+                <DialogDescription>
+                  Descreva a atividade que você vai realizar e selecione a categoria
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-6 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="tarefa" className="text-sm font-medium">Descrição da Tarefa *</Label>
+                  <Input
+                    id="tarefa"
+                    placeholder="Ex: Elaboração de petição inicial..."
+                    value={formData.descricao}
+                    onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))}
+                    className="rounded-xl"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="categoria" className="text-sm font-medium">Categoria *</Label>
+                  <Select value={formData.categoria} onValueChange={(value) => setFormData(prev => ({ ...prev, categoria: value as TimesheetCategoria | "" }))}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIMESHEET_CATEGORIAS.map(cat => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button 
+                  onClick={handleStartTimer} 
+                  disabled={!formData.descricao || !formData.categoria}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-xl"
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Iniciar Timer
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
 
-      {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Tempo Hoje</CardTitle>
+        {/* Timer Ativo com Design Premium */}
+        <Card className="bg-gradient-to-br from-white/80 to-blue-50/80 dark:from-slate-800/80 dark:to-blue-900/80 backdrop-blur-md border-blue-200/50 dark:border-blue-800/50 shadow-2xl rounded-3xl overflow-hidden">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-2xl">
+              <div className={`p-2 rounded-full ${timerAtivo ? 'bg-green-500/20 text-green-600' : 'bg-slate-500/20 text-slate-600'}`}>
+                <Timer className="h-6 w-6" />
+              </div>
+              Timer Ativo {activeTimer ? '(Supabase)' : isTimerActive ? '(Local)' : ''}
+            </CardTitle>
+            <CardDescription className="text-lg">
+              {timerAtivo ? "Timer em execução" : "Nenhum timer ativo no momento"}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMinutes(todayStats.totalMinutos)}</div>
-            <p className="text-xs text-muted-foreground">{todayStats.totalRegistros} registros</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Esta Semana</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMinutes(weekStats.totalMinutos)}</div>
-            <p className="text-xs text-muted-foreground">{weekStats.totalRegistros} registros</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Média Diária</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {weekStats.totalRegistros > 0 ? formatMinutes(Math.round(weekStats.totalMinutos / 7)) : "0m"}
-            </div>
-            <p className="text-xs text-muted-foreground">Últimos 7 dias</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Lista de Registros */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Registros Recentes</CardTitle>
-          <CardDescription>
-            Últimos 7 dias de atividades registradas ({timesheets.length} encontrados)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {timesheets.length > 0 ? (
-            <div className="space-y-4">
-              {timesheets.map((timesheet) => (
-                <div key={timesheet.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <p className="font-medium">{timesheet.tarefa_descricao}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Categoria: {timesheet.categoria} | Status: {timesheet.status}
-                    </p>
+          <CardContent className="space-y-6">
+            {timerAtivo ? (
+              <>
+                <div className="text-center py-8">
+                  <div className="text-6xl md:text-8xl font-mono font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-wider">
+                    {formatTime(elapsedTime)}
                   </div>
-                  
-                  <div className="text-right space-y-1">
-                    <p className="font-mono font-bold">
-                      {timesheet.duracao_minutos ? formatMinutes(timesheet.duracao_minutos) : 'Em andamento'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(timesheet.data_inicio).toLocaleDateString('pt-BR')}
+                  <div className="mt-4 p-4 bg-white/60 dark:bg-slate-800/60 rounded-2xl backdrop-blur-sm">
+                    <p className="text-lg font-semibold text-slate-700 dark:text-slate-200">
+                      {activeTimer?.tarefa_descricao || formData.descricao}
                     </p>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Nenhum registro encontrado</p>
-              <p className="text-sm">Inicie o timer para começar a registrar suas atividades</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+
+                <div className="flex justify-center">
+                  <Button 
+                    variant="destructive" 
+                    onClick={handleStopTimer}
+                    className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                    size="lg"
+                  >
+                    <Square className="h-5 w-5 mr-2" />
+                    Finalizar
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-12">
+                <div className="p-6 bg-slate-100/80 dark:bg-slate-700/80 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+                  <Timer className="h-12 w-12 text-slate-400" />
+                </div>
+                <p className="text-xl text-muted-foreground mb-6">Nenhum timer ativo</p>
+                <Button 
+                  onClick={() => setIsNewTimerDialogOpen(true)} 
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                  size="lg"
+                >
+                  <Play className="h-5 w-5 mr-2" />
+                  Iniciar Novo Timer
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Estatísticas Modernas */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200/50 dark:border-green-800/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Tempo Hoje</CardTitle>
+              <div className="p-2 bg-green-500/20 rounded-lg">
+                <Clock className="h-4 w-4 text-green-600 dark:text-green-400" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-green-900 dark:text-green-100">{formatMinutes(todayStats.totalMinutos)}</div>
+              <div className="flex items-center pt-1 text-xs text-green-600 dark:text-green-400">
+                <TrendingUp className="mr-1 h-3 w-3" />
+                <span>{todayStats.totalRegistros} registros</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200/50 dark:border-blue-800/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Esta Semana</CardTitle>
+              <div className="p-2 bg-blue-500/20 rounded-lg">
+                <Timer className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">{formatMinutes(weekStats.totalMinutos)}</div>
+              <div className="flex items-center pt-1 text-xs text-blue-600 dark:text-blue-400">
+                <ArrowUpRight className="mr-1 h-3 w-3" />
+                <span>{weekStats.totalRegistros} registros</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 border-purple-200/50 dark:border-purple-800/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300">Média Diária</CardTitle>
+              <div className="p-2 bg-purple-500/20 rounded-lg">
+                <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                {weekStats.totalRegistros > 0 ? formatMinutes(Math.round(weekStats.totalMinutos / 7)) : "0m"}
+              </div>
+              <div className="flex items-center pt-1 text-xs text-purple-600 dark:text-purple-400">
+                <Clock className="mr-1 h-3 w-3" />
+                <span>Últimos 7 dias</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Lista de Registros com Design Moderno */}
+        <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md shadow-xl rounded-3xl overflow-hidden">
+          <CardHeader>
+            <CardTitle className="text-2xl">Registros Recentes</CardTitle>
+            <CardDescription className="text-lg">
+              Últimos 7 dias de atividades registradas ({timesheets.length} encontrados)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {timesheets.length > 0 ? (
+              <div className="space-y-4">
+                {timesheets.map((timesheet) => (
+                  <div key={timesheet.id} className="flex items-center justify-between p-6 bg-gradient-to-r from-slate-50/80 to-blue-50/80 dark:from-slate-700/80 dark:to-slate-600/80 border border-slate-200/50 dark:border-slate-600/50 rounded-2xl hover:shadow-lg transition-all duration-300 backdrop-blur-sm">
+                    <div className="space-y-2">
+                      <p className="font-semibold text-lg text-slate-900 dark:text-slate-100">{timesheet.tarefa_descricao}</p>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                          {timesheet.categoria}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full ${
+                          timesheet.status === 'finalizado' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 
+                          'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                        }`}>
+                          {timesheet.status}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="text-right space-y-2">
+                      <p className="font-mono font-bold text-xl text-slate-900 dark:text-slate-100">
+                        {timesheet.duracao_minutos ? formatMinutes(timesheet.duracao_minutos) : 'Em andamento'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(timesheet.data_inicio).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <div className="p-8 bg-slate-100/80 dark:bg-slate-700/80 rounded-full w-32 h-32 mx-auto mb-6 flex items-center justify-center">
+                  <Clock className="h-16 w-16 text-slate-400" />
+                </div>
+                <p className="text-xl font-semibold text-slate-600 dark:text-slate-300 mb-2">Nenhum registro encontrado</p>
+                <p className="text-muted-foreground">Inicie o timer para começar a registrar suas atividades</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 } 
