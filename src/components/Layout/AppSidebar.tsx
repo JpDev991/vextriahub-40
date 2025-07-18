@@ -21,7 +21,8 @@ import {
   MessageSquareText,
   Shield,
   Building2,
-  AlertCircle
+  AlertCircle,
+  Clock
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -52,6 +53,7 @@ const menuItems = [
   { title: "Equipe", url: "/equipe", icon: UsersIcon },
   { title: "Atendimentos", url: "/atendimentos", icon: UserCheck },
   { title: "Tarefas", url: "/tarefas", icon: Calendar },
+  { title: "Timesheet", url: "/timesheet", icon: Clock },
   { title: "Prazos", url: "/prazos", icon: AlertCircle },
   { title: "Publicações", url: "/publicacoes", icon: BookOpen },
   { title: "Consultivo", url: "/consultivo", icon: MessageSquareText },
@@ -98,9 +100,21 @@ export function AppSidebar() {
       <div className="flex h-full flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-3 md:p-4 border-b border-sidebar-border">
-          {(!isCollapsed || isMobile) && (
+          {(!isCollapsed || isMobile) ? (
             <div className="flex items-center">
-              <span className="text-lg md:text-xl font-bold text-primary">VextriaHub</span>
+              <img 
+                src="/vextria-logo.svg" 
+                alt="VextriaHub" 
+                className="h-8 md:h-10 w-auto"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center w-full">
+              <img 
+                src="/vextria-icon.svg" 
+                alt="VextriaHub" 
+                className="h-8 w-8"
+              />
             </div>
           )}
           {!isMobile && (

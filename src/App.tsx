@@ -37,6 +37,7 @@ import NotFound from "./pages/NotFound";
 import Audiencias from "./pages/Audiencias";
 import Equipe from "./pages/Equipe";
 import Escritorio from "./pages/Escritorio";
+import Timesheet from "./pages/Timesheet";
 import { useState, useEffect } from "react";
 
 const queryClient = new QueryClient({
@@ -173,6 +174,16 @@ const AppWithRouter = () => {
             <PrivateRoute>
               <AppLayout>
                 <Tarefas />
+              </AppLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/timesheet"
+          element={
+            <PrivateRoute>
+              <AppLayout>
+                <Timesheet />
               </AppLayout>
             </PrivateRoute>
           }

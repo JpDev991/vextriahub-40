@@ -772,6 +772,78 @@ export type Database = {
           },
         ]
       }
+      timesheets: {
+        Row: {
+          categoria: string
+          cliente_id: string | null
+          created_at: string | null
+          data_fim: string | null
+          data_inicio: string
+          deletado: boolean | null
+          deletado_pendente: boolean | null
+          duracao_minutos: number | null
+          id: string
+          observacoes: string | null
+          office_id: string | null
+          processo_id: string | null
+          status: string | null
+          tarefa_descricao: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          categoria?: string
+          cliente_id?: string | null
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio: string
+          deletado?: boolean | null
+          deletado_pendente?: boolean | null
+          duracao_minutos?: number | null
+          id?: string
+          observacoes?: string | null
+          office_id?: string | null
+          processo_id?: string | null
+          status?: string | null
+          tarefa_descricao: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          categoria?: string
+          cliente_id?: string | null
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          deletado?: boolean | null
+          deletado_pendente?: boolean | null
+          duracao_minutos?: number | null
+          id?: string
+          observacoes?: string | null
+          office_id?: string | null
+          processo_id?: string | null
+          status?: string | null
+          tarefa_descricao?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheets_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheets_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
