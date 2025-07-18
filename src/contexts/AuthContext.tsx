@@ -212,13 +212,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleAuthStateChange = useCallback(async (event: string, newSession: Session | null) => {
     if (!mountedRef.current) return;
     
-    console.log('Auth state changed:', event, newSession?.user?.email);
+    console.log('🔐 Auth state changed:', event, newSession?.user?.email);
+    console.log('🔐 Previous session:', !!session);
+    console.log('🔐 New session:', !!newSession);
     
     setSession(newSession);
     
     if (newSession?.user) {
+      console.log('🔐 Processing user data for:', newSession.user.email);
       await processUserData(newSession.user);
+      console.log('🔐 User data processed, isAuthenticated should be true');
     } else {
+      console.log('🔐 No session, clearing user data');
       setUser(null);
       setProfile(null);
       setOffice(null);
@@ -228,8 +233,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     if (mountedRef.current) {
       setIsLoading(false);
+      console.log('🔐 Auth loading set to false');
     }
-  }, [processUserData]);
+  }, [processUserData, session]);
 
   // Initialize auth state
   useEffect(() => {
@@ -292,18 +298,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     console.log('Attempting login for:', email);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      console.error('Login error:', error);
-    } else {
+      if (error) {
+        console.error('Login error:', error);
+        return { error };
+      }
+
       console.log('Login successful for:', email);
-    }
+      
+      // Aguardar um pouco para garantir que o auth state change seja processado
+      if (data.session) {
+        console.log('Session established, processing user data...');
+        
+        // Processar dados do usuário imediatamente
+        await processUserData(data.user);
+        
+        // Aguardar confirmação de que o estado foi atualizado
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        while (attempts < maxAttempts && !session) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
+        console.log('Login process completed after', attempts * 100, 'ms');
+      }
 
-    return { error };
+      return { error: null };
+    } catch (err) {
+      console.error('Unexpected login error:', err);
+      return { error: err };
+    }
   };
 
   const register = async (email: string, password: string, fullName: string) => {

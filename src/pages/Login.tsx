@@ -15,24 +15,46 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loginInProgress, setLoginInProgress] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, isLoading: authLoading, session } = useAuth();
 
   // Se já estiver logado, redirecionar para dashboard
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !loginInProgress && session) {
+      console.log('Already authenticated, redirecting...');
       const from = location.state?.from?.pathname;
       // Redirecionar para a página solicitada ou dashboard
       const destination = (from && from !== "/" && from !== "/login") ? from : "/dashboard";
       navigate(destination, { replace: true });
     }
-  }, [isAuthenticated, navigate, location]);
+  }, [isAuthenticated, navigate, location, loginInProgress, session]);
+
+  // Monitorar autenticação após login
+  useEffect(() => {
+    if (loginInProgress && isAuthenticated && session) {
+      console.log('Login completed, authentication confirmed, redirecting...');
+      
+      toast({
+        title: "Login realizado com sucesso!",
+        description: "Bem-vindo ao VextriaHub",
+      });
+
+      // Aguardar um pouco para garantir que a sessão está estabelecida
+      setTimeout(() => {
+        const from = location.state?.from?.pathname || "/dashboard";
+        navigate(from, { replace: true });
+        setLoginInProgress(false);
+      }, 500);
+    }
+  }, [loginInProgress, isAuthenticated, session, navigate, location, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setLoginInProgress(true);
 
     try {
       if (!email || !password) {
@@ -42,30 +64,40 @@ const Login = () => {
           variant: "destructive",
         });
         setIsLoading(false);
+        setLoginInProgress(false);
         return;
       }
 
+      console.log('Attempting login for:', email);
       const { error } = await login(email, password);
 
       if (error) {
         console.error('Login error:', error);
+        setLoginInProgress(false);
+        
+        let errorMessage = "Credenciais inválidas";
+        
+        if (error.message?.includes('Invalid login credentials')) {
+          errorMessage = "Email ou senha incorretos";
+        } else if (error.message?.includes('Email not confirmed')) {
+          errorMessage = "Email não confirmado. Verifique sua caixa de entrada.";
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
         toast({
           title: "Erro no login",
-          description: error.message || "Credenciais inválidas",
+          description: errorMessage,
           variant: "destructive",
         });
       } else {
-        toast({
-          title: "Login realizado com sucesso!",
-          description: "Bem-vindo ao VextriaHub",
-        });
-
-        // Redirecionar para a página solicitada ou dashboard
-        const from = location.state?.from?.pathname || "/dashboard";
-        navigate(from, { replace: true });
+        console.log('Login successful, waiting for authentication state update...');
+        // Não redirecionar aqui - deixar o useEffect monitorar isAuthenticated
+        // O redirecionamento será feito automaticamente quando isAuthenticated for true
       }
     } catch (error) {
       console.error('Unexpected error:', error);
+      setLoginInProgress(false);
       toast({
         title: "Erro no login",
         description: "Ocorreu um erro inesperado. Tente novamente.",

@@ -28,7 +28,7 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowTimeout(true);
-    }, 5000); // 5 segundos
+    }, 8000); // Aumentado para 8 segundos para dar mais tempo
 
     return () => clearTimeout(timer);
   }, []);
@@ -38,7 +38,10 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({
     return (
       <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        <p className="text-sm text-muted-foreground">Carregando...</p>
+        <p className="text-sm text-muted-foreground">Verificando autenticação...</p>
+        <p className="text-xs text-muted-foreground/60">
+          Aguardando resposta do servidor...
+        </p>
       </div>
     );
   }
