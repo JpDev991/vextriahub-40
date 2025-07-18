@@ -5,21 +5,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Clock, Play, Pause, Square, Timer, Plus } from "lucide-react";
+import { Clock, Play, Pause, Square, Timer, Plus, AlertCircle } from "lucide-react";
 import { useTimesheet, TIMESHEET_CATEGORIAS, type TimesheetCategoria } from "@/hooks/useTimesheet";
 
 export default function Timesheet() {
+  // Estado para controlar se o componente foi montado
+  const [mounted, setMounted] = useState(false);
+  
   // Tentar usar hook real, com fallback para funcionalidade local
+  const hookResult = useTimesheet();
   const { 
     data: timesheets = [], 
     loading = false, 
+    error = null,
     activeTimer, 
     startTimer,
     stopTimer,
     getTodayStats,
     getWeekStats
-  } = useTimesheet();
+  } = hookResult || {};
 
+  // Estados locais para fallback
   const [isNewTimerDialogOpen, setIsNewTimerDialogOpen] = useState(false);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -27,6 +33,25 @@ export default function Timesheet() {
     descricao: "",
     categoria: "" as TimesheetCategoria | ""
   });
+
+  // Marcar como montado após a primeira renderização
+  useEffect(() => {
+    setMounted(true);
+    console.log('Timesheet: Componente montado');
+  }, []);
+
+  // Log para debug de estados
+  useEffect(() => {
+    if (mounted) {
+      console.log('Timesheet: Estados atuais', {
+        loading,
+        error,
+        timesheetsCount: timesheets?.length || 0,
+        activeTimer: !!activeTimer,
+        mounted
+      });
+    }
+  }, [mounted, loading, error, timesheets?.length, activeTimer]);
 
   // Usar timer ativo do hook ou local como fallback
   const timerAtivo = activeTimer || (isTimerActive ? { tarefa_descricao: formData.descricao } : null);
@@ -71,7 +96,7 @@ export default function Timesheet() {
     
     try {
       // Tentar usar hook real
-      if (startTimer && formData.categoria !== "") {
+      if (startTimer && formData.categoria) {
         const result = await startTimer(
           formData.descricao,
           formData.categoria as TimesheetCategoria
@@ -89,6 +114,7 @@ export default function Timesheet() {
     }
 
     // Fallback: usar timer local
+    console.log('Usando timer local como fallback');
     setIsTimerActive(true);
     setElapsedTime(0);
     setIsNewTimerDialogOpen(false);
@@ -115,6 +141,7 @@ export default function Timesheet() {
     }
 
     // Fallback: parar timer local
+    console.log('Parando timer local');
     setIsTimerActive(false);
     setElapsedTime(0);
     if ((window as any).timerInterval) {
@@ -135,7 +162,8 @@ export default function Timesheet() {
     return `${mins}m`;
   };
 
-  if (loading) {
+  // Mostrar carregamento apenas se realmente carregando e montado
+  if (!mounted || (loading && mounted)) {
     return (
       <div className="container mx-auto p-4 md:p-6 lg:p-8">
         <div className="text-center py-8">
@@ -148,12 +176,24 @@ export default function Timesheet() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+      {/* Mostrar erro se houver */}
+      {error && (
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              <p className="text-sm">Modo offline: {error}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
             <Clock className="h-6 w-6 md:h-8 md:w-8" />
-            Timesheet
+            Timesheet {error ? '(Modo Offline)' : ''}
           </h1>
           <p className="text-muted-foreground">
             Controle e acompanhe o tempo gasto em suas atividades jurídicas
@@ -187,7 +227,7 @@ export default function Timesheet() {
               
               <div className="space-y-2">
                 <Label htmlFor="categoria">Categoria *</Label>
-                <Select value={formData.categoria} onValueChange={(value) => setFormData(prev => ({ ...prev, categoria: value }))}>
+                <Select value={formData.categoria} onValueChange={(value) => setFormData(prev => ({ ...prev, categoria: value as TimesheetCategoria | "" }))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione uma categoria" />
                   </SelectTrigger>

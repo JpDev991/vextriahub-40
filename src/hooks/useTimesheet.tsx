@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -6,7 +6,9 @@ import { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/type
 
 // Tipos para Timesheet
 export type Timesheet = Tables<'timesheets'>;
-export type NovoTimesheet = TablesInsert<'timesheets'>;
+export type NovoTimesheet = TablesInsert<'timesheets'> & {
+  categoria: TimesheetCategoria; // Tornar categoria obrigatória
+};
 export type AtualizarTimesheet = TablesUpdate<'timesheets'>;
 
 // Categorias específicas para área jurídica
@@ -46,16 +48,44 @@ export function useTimesheet(): TimesheetHookResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTimer, setActiveTimer] = useState<Timesheet | null>(null);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Fetch dados dos últimos 7 dias
-  const fetchData = async () => {
+  // Buscar timer ativo
+  const getActiveTimerInternal = useCallback(async (): Promise<Timesheet | null> => {
+    if (!user) return null;
+
+    try {
+      const { data: result, error } = await supabase
+        .from('timesheets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'ativo')
+        .eq('deletado', false)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = não encontrado
+
+      setActiveTimer(result || null);
+      return result || null;
+    } catch (err) {
+      console.error('Erro ao buscar timer ativo:', err);
+      return null;
+    }
+  }, [user?.id]);
+
+  // Memoizar fetchData para evitar loops infinitos
+  const fetchData = useCallback(async () => {
     if (!user) {
       setData([]);
       setLoading(false);
+      setHasInitialized(true);
       return;
     }
+
+    // Proteção contra múltiplas chamadas simultâneas
+    if (loading && hasInitialized) return;
 
     try {
       setLoading(true);
@@ -75,22 +105,26 @@ export function useTimesheet(): TimesheetHookResult {
       setData(result || []);
       setError(null);
 
-      // Verificar timer ativo
-      await getActiveTimer();
+      // Verificar timer ativo apenas se não há erro
+      await getActiveTimerInternal();
     } catch (err) {
       console.error('Erro ao buscar timesheets:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
       setData([]); // Garantir que data seja um array vazio em caso de erro
-      // Remover toast de erro para não incomodar durante desenvolvimento
-      // toast({
-      //   title: 'Erro ao carregar timesheet',
-      //   description: 'Não foi possível carregar os registros de tempo.',
-      //   variant: 'destructive',
-      // });
+      
+      // Mostrar toast de erro apenas se não for erro de permissão
+      if (err instanceof Error && !err.message.includes('permission')) {
+        toast({
+          title: 'Erro ao carregar timesheet',
+          description: 'Não foi possível carregar os registros de tempo.',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setLoading(false);
+      setHasInitialized(true);
     }
-  };
+  }, [user?.id]); // Dependências mínimas para evitar loops
 
   // Criar novo registro
   const create = async (newRecord: NovoTimesheet): Promise<Timesheet | null> => {
@@ -210,7 +244,7 @@ export function useTimesheet(): TimesheetHookResult {
     if (!user) return null;
 
     // Verificar se já há timer ativo
-    const currentActiveTimer = await getActiveTimer();
+    const currentActiveTimer = await getActiveTimerInternal();
     if (currentActiveTimer) {
       toast({
         title: 'Timer já ativo',
@@ -233,14 +267,20 @@ export function useTimesheet(): TimesheetHookResult {
         updated_at: new Date().toISOString()
       };
 
+      console.log('Starting timer with data:', newTimesheet);
+
       const { data: result, error } = await supabase
         .from('timesheets')
         .insert(newTimesheet)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error creating timesheet:', error);
+        throw error;
+      }
 
+      console.log('Timer started successfully:', result);
       setActiveTimer(result);
       setData(prev => [result, ...prev]);
 
@@ -254,7 +294,7 @@ export function useTimesheet(): TimesheetHookResult {
       console.error('Erro ao iniciar timer:', err);
       toast({
         title: 'Erro ao iniciar timer',
-        description: 'Não foi possível iniciar o timer.',
+        description: err instanceof Error ? err.message : 'Não foi possível iniciar o timer.',
         variant: 'destructive',
       });
       return null;
@@ -339,28 +379,6 @@ export function useTimesheet(): TimesheetHookResult {
     }
   };
 
-  // Buscar timer ativo
-  const getActiveTimer = async (): Promise<Timesheet | null> => {
-    if (!user) return null;
-
-    try {
-      const { data: result, error } = await supabase
-        .from('timesheets')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'ativo')
-        .eq('deletado', false)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = não encontrado
-
-      setActiveTimer(result || null);
-      return result || null;
-    } catch (err) {
-      console.error('Erro ao buscar timer ativo:', err);
-      return null;
-    }
-  };
 
   // Estatísticas do dia
   const getTodayStats = () => {
@@ -400,12 +418,12 @@ export function useTimesheet(): TimesheetHookResult {
     };
   };
 
-  // Efeito para carregar dados na inicialização
+  // Efeito para carregar dados na inicialização - executar apenas uma vez quando user mudar
   useEffect(() => {
-    if (user) {
+    if (user && !hasInitialized) {
       fetchData();
     }
-  }, [user]);
+  }, [user?.id, hasInitialized, fetchData]);
 
   return {
     data,
@@ -419,7 +437,7 @@ export function useTimesheet(): TimesheetHookResult {
     startTimer,
     pauseTimer,
     stopTimer,
-    getActiveTimer,
+    getActiveTimer: getActiveTimerInternal,
     getTodayStats,
     getWeekStats
   };
