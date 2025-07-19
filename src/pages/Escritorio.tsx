@@ -1,7 +1,5 @@
 import React from "react";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/Layout/AppSidebar";
-import { AppHeader } from "@/components/Layout/AppHeader";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PermissionGuard } from "@/components/Auth/PermissionGuard";
 import { OfficeSettings } from "@/components/Office/OfficeSettings";
@@ -11,12 +9,7 @@ import { Building2, Users, Settings } from "lucide-react";
 const Escritorio = () => {
   return (
     <PermissionGuard permission="canManageOffice">
-      <SidebarProvider>
-        <div className="min-h-screen flex w-full bg-background">
-          <AppSidebar />
-          <div className="flex-1 flex flex-col min-w-0">
-            <AppHeader />
-            <main className="flex-1 p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
               <div className="space-y-2">
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
                   <Building2 className="h-6 w-6 text-primary" />
@@ -46,11 +39,8 @@ const Escritorio = () => {
                 <TabsContent value="usuarios" className="space-y-6">
                   <UserManagement />
                 </TabsContent>
-              </Tabs>
-            </main>
-          </div>
-        </div>
-      </SidebarProvider>
+        </Tabs>
+      </div>
     </PermissionGuard>
   );
 };

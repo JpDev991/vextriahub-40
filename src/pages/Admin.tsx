@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/Layout/AppSidebar";
-import { AppHeader } from "@/components/Layout/AppHeader";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -86,35 +84,22 @@ const Admin = () => {
 
   if (!canViewAdminFeatures) {
     return (
-      <SidebarProvider>
-        <div className="min-h-screen flex w-full bg-background">
-          <AppSidebar />
-          <div className="flex-1 flex flex-col min-w-0">
-            <AppHeader />
-            <main className="flex-1 p-6 flex items-center justify-center">
-              <Card className="max-w-md w-full">
-                <CardContent className="text-center py-12">
-                  <Shield className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Acesso Negado</h3>
-                  <p className="text-muted-foreground">
-                    Você precisa ser um administrador para acessar esta página.
-                  </p>
-                </CardContent>
-              </Card>
-            </main>
-          </div>
-        </div>
-      </SidebarProvider>
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-[60vh]">
+        <Card className="max-w-md w-full">
+          <CardContent className="text-center py-12">
+            <Shield className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Acesso Negado</h3>
+            <p className="text-muted-foreground">
+              Você precisa ser um administrador para acessar esta página.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <AppHeader />
-          <main className="flex-1 p-4 md:p-6 space-y-4 md:space-y-6 overflow-x-hidden">
+    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6 overflow-x-hidden">
             {/* Page Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
@@ -523,11 +508,8 @@ const Admin = () => {
                 </div>
               </div>
             )}
-          </main>
-        </div>
       </div>
-    </SidebarProvider>
-  );
-};
+    );
+  };
 
 export default Admin;

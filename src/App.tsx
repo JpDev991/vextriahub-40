@@ -33,6 +33,7 @@ import Notificacoes from "./pages/Notificacoes";
 import Configuracoes from "./pages/Configuracoes";
 import Perfil from "./pages/Perfil";
 import Admin from "./pages/Admin";
+import SuperAdmin from "./pages/SuperAdmin";
 import NotFound from "./pages/NotFound";
 import Audiencias from "./pages/Audiencias";
 import Equipe from "./pages/Equipe";
@@ -291,6 +292,11 @@ const AppWithRouter = () => {
         <Route path="/admin" element={
           <PrivateRoute requirePermission="canViewAdmin">
             <Admin />
+          </PrivateRoute>
+        } />
+        <Route path="/super-admin" element={
+          <PrivateRoute requireRole="super_admin">
+            <SuperAdmin />
           </PrivateRoute>
         } />
         <Route

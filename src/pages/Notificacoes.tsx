@@ -1,7 +1,5 @@
 
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/Layout/AppSidebar";
-import { AppHeader } from "@/components/Layout/AppHeader";
+
 import { Bell, Clock, AlertTriangle, CheckCircle, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,12 +52,7 @@ const Notificacoes = () => {
   const unreadCount = notificationList.filter(n => !n.read).length;
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <AppHeader />
-          <main className="flex-1 p-4 md:p-6 space-y-4 md:space-y-6 overflow-x-hidden">
+    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6 overflow-x-hidden">
             {/* Page Header */}
             <div className="space-y-2">
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
@@ -133,11 +126,8 @@ const Notificacoes = () => {
                 ))
               )}
             </div>
-          </main>
-        </div>
       </div>
-    </SidebarProvider>
-  );
+    );
 };
 
 export default Notificacoes;

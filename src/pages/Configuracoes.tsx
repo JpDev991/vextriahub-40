@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/Layout/AppSidebar";
-import { AppHeader } from "@/components/Layout/AppHeader";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,12 +82,7 @@ const Configuracoes = () => {
   };
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <AppHeader />
-          <main className="flex-1 p-4 md:p-6 space-y-4 md:space-y-6">
+    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
             <div className="space-y-2">
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Configurações</h1>
               <p className="text-sm md:text-base text-muted-foreground">
@@ -335,11 +328,8 @@ const Configuracoes = () => {
                   </CardContent>
                 </Card>
               </TabsContent>
-            </Tabs>
-          </main>
-        </div>
-      </div>
-    </SidebarProvider>
+      </Tabs>
+    </div>
   );
 };
 
